@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,6 +29,7 @@ const AIAssistant = () => {
   const [error, setError] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef(null);
+  const [geminiModel, setGeminiModel] = useState(null);
 
   // Quick action buttons
   const quickActions = [
@@ -38,12 +40,32 @@ const AIAssistant = () => {
   ];
 
   useEffect(() => {
+    // Initialize Gemini AI
+    const initializeGemini = async () => {
+      try {
+        const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+        if (!apiKey) {
+          setError('Gemini API key not found. Please check your environment configuration.');
+          return;
+        }
+        
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+        setGeminiModel(model);
+      } catch (error) {
+        console.error('Error initializing Gemini:', error);
+        setError('Failed to initialize AI assistant. Please try again later.');
+      }
+    };
+
+    initializeGemini();
+
     // Initialize with welcome message
     setMessages([
       {
         id: 1,
         type: 'ai',
-        content: 'Hello! I\'m your AI Health Assistant. I can help you with preliminary health queries, symptom assessment, and provide general health guidance. How can I assist you today?',
+        content: 'Hello! I\'m your AI Health Assistant powered by Google\'s Gemini AI. I can help you with preliminary health queries, symptom assessment, and provide general health guidance. How can I assist you today?',
         timestamp: new Date().toISOString()
       }
     ]);
@@ -74,8 +96,11 @@ const AIAssistant = () => {
     setError('');
 
     try {
-      // Simulate AI response (replace with actual Gemini API call later)
-      const aiResponse = await simulateAIResponse(message);
+      if (!geminiModel) {
+        throw new Error('AI model not initialized');
+      }
+
+      const aiResponse = await generateAIResponse(message);
       
       const aiMessage = {
         id: Date.now() + 1,
@@ -84,11 +109,9 @@ const AIAssistant = () => {
         timestamp: new Date().toISOString()
       };
 
-      setTimeout(() => {
-        setMessages(prev => [...prev, aiMessage]);
-        setIsTyping(false);
-        setLoading(false);
-      }, 1500);
+      setMessages(prev => [...prev, aiMessage]);
+      setIsTyping(false);
+      setLoading(false);
 
     } catch (error) {
       console.error('Error sending message:', error);
@@ -98,27 +121,30 @@ const AIAssistant = () => {
     }
   };
 
-  const simulateAIResponse = async (message) => {
-    // This is a placeholder - replace with actual Gemini API integration
-    const responses = {
-      'symptoms': 'I understand you\'re experiencing symptoms. While I can provide general information, it\'s important to consult with a healthcare professional for proper diagnosis. Can you describe your symptoms in more detail?',
-      'diet': 'I\'d be happy to help with dietary advice! A balanced diet typically includes fruits, vegetables, lean proteins, whole grains, and healthy fats. What specific dietary goals or concerns do you have?',
-      'exercise': 'Great that you want to start exercising! I recommend starting with 150 minutes of moderate-intensity exercise per week. What\'s your current fitness level and what activities interest you?',
-      'medication': 'I can provide general information about medications, but always consult your doctor or pharmacist for specific medical advice. What medication questions do you have?'
-    };
+  const generateAIResponse = async (message) => {
+    try {
+      const healthContext = `
+You are a helpful AI health assistant. Provide accurate, empathetic, and informative responses about general health topics.
 
-    const lowerMessage = message.toLowerCase();
-    
-    if (lowerMessage.includes('symptom')) {
-      return responses.symptoms;
-    } else if (lowerMessage.includes('diet') || lowerMessage.includes('nutrition')) {
-      return responses.diet;
-    } else if (lowerMessage.includes('exercise') || lowerMessage.includes('workout')) {
-      return responses.exercise;
-    } else if (lowerMessage.includes('medication') || lowerMessage.includes('medicine')) {
-      return responses.medication;
-    } else {
-      return 'Thank you for your question. I\'m here to help with general health guidance. For specific medical concerns, please consult with your healthcare provider. How else can I assist you?';
+IMPORTANT GUIDELINES:
+- Always emphasize that your advice is for informational purposes only
+- Recommend consulting healthcare professionals for medical decisions
+- Be supportive and understanding
+- Provide practical, evidence-based information
+- If asked about specific medical conditions, provide general information but stress the need for professional medical advice
+- Keep responses concise but thorough
+- Show empathy for health concerns
+
+User question: ${message}
+
+Response:`;
+
+      const result = await geminiModel.generateContent(healthContext);
+      const response = await result.response;
+      return response.text();
+    } catch (error) {
+      console.error('Error generating AI response:', error);
+      throw new Error('Failed to generate response from AI assistant');
     }
   };
 
@@ -179,23 +205,23 @@ const AIAssistant = () => {
       </Card>
 
       {/* Chat Interface */}
-      <Card className="h-96 flex flex-col">
-        <CardHeader className="pb-3">
+      <Card className="h-[500px] flex flex-col">
+        <CardHeader className="pb-3 flex-shrink-0">
           <CardTitle className="flex items-center text-sm">
             <MessageCircle className="h-4 w-4 mr-2" />
             Health Chat
           </CardTitle>
         </CardHeader>
-        <CardContent className="flex-1 flex flex-col p-0">
+        <CardContent className="flex-1 flex flex-col p-0 min-h-0">
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
             {messages.map((message) => (
               <div
                 key={message.id}
                 className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                  className={`max-w-[75%] px-4 py-2 rounded-lg ${
                     message.type === 'user'
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-100 text-gray-900'
@@ -224,7 +250,7 @@ const AIAssistant = () => {
             {/* Typing indicator */}
             {isTyping && (
               <div className="flex justify-start">
-                <div className="bg-gray-100 text-gray-900 max-w-xs lg:max-w-md px-4 py-2 rounded-lg">
+                <div className="bg-gray-100 text-gray-900 max-w-[75%] px-4 py-2 rounded-lg">
                   <div className="flex items-center space-x-2">
                     <Bot className="h-4 w-4" />
                     <div className="flex space-x-1">
@@ -251,7 +277,7 @@ const AIAssistant = () => {
           )}
 
           {/* Input Area */}
-          <div className="border-t p-4">
+          <div className="border-t p-4 flex-shrink-0">
             <div className="flex space-x-2">
               <Textarea
                 value={inputMessage}
