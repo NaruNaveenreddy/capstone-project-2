@@ -27,6 +27,7 @@ const AIAssistant = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   const messagesEndRef = useRef(null);
 
   // Quick action buttons
@@ -38,6 +39,12 @@ const AIAssistant = () => {
   ];
 
   useEffect(() => {
+    // Check if API key is available
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    if (!apiKey) {
+      setError('Gemini API key not found. Please check your environment variables.');
+    }
+
     // Initialize with welcome message
     setMessages([
       {
@@ -74,8 +81,7 @@ const AIAssistant = () => {
     setError('');
 
     try {
-      // Simulate AI response (replace with actual Gemini API call later)
-      const aiResponse = await simulateAIResponse(message);
+      const aiResponse = await callGeminiAPI(message);
       
       const aiMessage = {
         id: Date.now() + 1,
@@ -84,41 +90,88 @@ const AIAssistant = () => {
         timestamp: new Date().toISOString()
       };
 
-      setTimeout(() => {
-        setMessages(prev => [...prev, aiMessage]);
-        setIsTyping(false);
-        setLoading(false);
-      }, 1500);
+      setMessages(prev => [...prev, aiMessage]);
+      setIsTyping(false);
+      setLoading(false);
 
     } catch (error) {
       console.error('Error sending message:', error);
-      setError('Failed to get AI response. Please try again.');
+      const errorMessage = error.message.includes('API key') 
+        ? 'API configuration error. Please check your environment variables.'
+        : error.message.includes('API Error')
+        ? `API Error: ${error.message}`
+        : 'Failed to get AI response. Please try again.';
+      
+      setError(errorMessage);
       setIsTyping(false);
       setLoading(false);
+      setRetryCount(prev => prev + 1);
     }
   };
 
-  const simulateAIResponse = async (message) => {
-    // This is a placeholder - replace with actual Gemini API integration
-    const responses = {
-      'symptoms': 'I understand you\'re experiencing symptoms. While I can provide general information, it\'s important to consult with a healthcare professional for proper diagnosis. Can you describe your symptoms in more detail?',
-      'diet': 'I\'d be happy to help with dietary advice! A balanced diet typically includes fruits, vegetables, lean proteins, whole grains, and healthy fats. What specific dietary goals or concerns do you have?',
-      'exercise': 'Great that you want to start exercising! I recommend starting with 150 minutes of moderate-intensity exercise per week. What\'s your current fitness level and what activities interest you?',
-      'medication': 'I can provide general information about medications, but always consult your doctor or pharmacist for specific medical advice. What medication questions do you have?'
-    };
-
-    const lowerMessage = message.toLowerCase();
+  const callGeminiAPI = async (message) => {
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
     
-    if (lowerMessage.includes('symptom')) {
-      return responses.symptoms;
-    } else if (lowerMessage.includes('diet') || lowerMessage.includes('nutrition')) {
-      return responses.diet;
-    } else if (lowerMessage.includes('exercise') || lowerMessage.includes('workout')) {
-      return responses.exercise;
-    } else if (lowerMessage.includes('medication') || lowerMessage.includes('medicine')) {
-      return responses.medication;
-    } else {
-      return 'Thank you for your question. I\'m here to help with general health guidance. For specific medical concerns, please consult with your healthcare provider. How else can I assist you?';
+    if (!apiKey) {
+      throw new Error('Gemini API key not found. Please check your environment variables.');
+    }
+
+    const systemPrompt = `You are a helpful AI health assistant. You can provide general health information, symptom guidance, and wellness advice. However, you must always remind users that you are not a substitute for professional medical advice and they should consult healthcare professionals for medical decisions. Keep responses concise, helpful, and medically responsible.`;
+
+    try {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{
+              text: `${systemPrompt}\n\nUser: ${message}`
+            }]
+          }],
+          generationConfig: {
+            temperature: 0.7,
+            topK: 40,
+            topP: 0.95,
+            maxOutputTokens: 1024,
+          },
+          safetySettings: [
+            {
+              category: "HARM_CATEGORY_HARASSMENT",
+              threshold: "BLOCK_MEDIUM_AND_ABOVE"
+            },
+            {
+              category: "HARM_CATEGORY_HATE_SPEECH",
+              threshold: "BLOCK_MEDIUM_AND_ABOVE"
+            },
+            {
+              category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+              threshold: "BLOCK_MEDIUM_AND_ABOVE"
+            },
+            {
+              category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+              threshold: "BLOCK_MEDIUM_AND_ABOVE"
+            }
+          ]
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`API Error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
+      }
+
+      const data = await response.json();
+      
+      if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
+        throw new Error('Invalid response format from Gemini API');
+      }
+
+      return data.candidates[0].content.parts[0].text;
+    } catch (error) {
+      console.error('Gemini API Error:', error);
+      throw error;
     }
   };
 
@@ -180,15 +233,15 @@ const AIAssistant = () => {
 
       {/* Chat Interface */}
       <Card className="h-96 flex flex-col">
-        <CardHeader className="pb-3">
+        <CardHeader className="pb-3 flex-shrink-0">
           <CardTitle className="flex items-center text-sm">
             <MessageCircle className="h-4 w-4 mr-2" />
             Health Chat
           </CardTitle>
         </CardHeader>
-        <CardContent className="flex-1 flex flex-col p-0">
+        <CardContent className="flex-1 flex flex-col p-0 min-h-0">
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
             {messages.map((message) => (
               <div
                 key={message.id}
@@ -227,10 +280,13 @@ const AIAssistant = () => {
                 <div className="bg-gray-100 text-gray-900 max-w-xs lg:max-w-md px-4 py-2 rounded-lg">
                   <div className="flex items-center space-x-2">
                     <Bot className="h-4 w-4" />
-                    <div className="flex space-x-1">
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                    <div className="flex items-center space-x-2">
+                      <div className="flex space-x-1">
+                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                      </div>
+                      <span className="text-xs text-gray-500">AI is thinking...</span>
                     </div>
                   </div>
                 </div>
@@ -245,13 +301,32 @@ const AIAssistant = () => {
             <div className="px-4 pb-2">
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
+                <AlertDescription className="flex items-center justify-between">
+                  <span>{error}</span>
+                  {retryCount > 0 && retryCount < 3 && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setError('');
+                        setRetryCount(0);
+                        const lastUserMessage = messages.filter(m => m.type === 'user').pop();
+                        if (lastUserMessage) {
+                          sendMessage(lastUserMessage.content);
+                        }
+                      }}
+                      className="ml-2"
+                    >
+                      Retry
+                    </Button>
+                  )}
+                </AlertDescription>
               </Alert>
             </div>
           )}
 
           {/* Input Area */}
-          <div className="border-t p-4">
+          <div className="border-t p-4 flex-shrink-0">
             <div className="flex space-x-2">
               <Textarea
                 value={inputMessage}
