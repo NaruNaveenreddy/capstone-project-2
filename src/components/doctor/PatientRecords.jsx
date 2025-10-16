@@ -22,7 +22,7 @@ import {
   Clock,
   Activity
 } from 'lucide-react';
-import { getAllUsers, getAppointments, getMedicalHistory } from '../../utils/database';
+import { getAllUsers, getAppointments, getMedicalHistory, getPatientMedicalHistory, getAllPatientsMedicalHistory } from '../../utils/database';
 
 const PatientRecords = () => {
   const { currentUser } = useAuth();
@@ -60,9 +60,15 @@ const PatientRecords = () => {
       const patientApts = allAppointments.filter(apt => apt.patientId === patientId);
       setPatientAppointments(patientApts);
 
-      // Fetch patient medical history
-      const medicalHistory = await getMedicalHistory(patientId);
-      setPatientMedicalHistory(medicalHistory);
+      // Fetch patient medical history from new database structure
+      const medicalHistory = await getPatientMedicalHistory(patientId);
+      if (!medicalHistory) {
+        // Fallback to old structure
+        const oldMedicalHistory = await getMedicalHistory(patientId);
+        setPatientMedicalHistory(oldMedicalHistory);
+      } else {
+        setPatientMedicalHistory(medicalHistory);
+      }
 
     } catch (error) {
       console.error('Error fetching patient details:', error);
@@ -351,23 +357,80 @@ const PatientRecords = () => {
                   <TabsContent value="medical" className="space-y-4">
                     {patientMedicalHistory ? (
                       <div className="space-y-6">
+                        {/* Health Summary for Doctor */}
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                          <h4 className="font-semibold text-blue-900 mb-3 flex items-center">
+                            <Activity className="h-5 w-5 mr-2" />
+                            Health Summary
+                          </h4>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                            <div>
+                              <span className="font-medium text-blue-800">Active Conditions:</span>
+                              <span className="ml-2 text-blue-700">
+                                {patientMedicalHistory.conditions?.filter(c => c.status === 'active').length || 0}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-blue-800">Current Medications:</span>
+                              <span className="ml-2 text-blue-700">
+                                {patientMedicalHistory.medications?.length || 0}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="font-medium text-blue-800">Known Allergies:</span>
+                              <span className="ml-2 text-blue-700">
+                                {patientMedicalHistory.allergies?.length || 0}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
                         {/* Medical Conditions */}
                         {patientMedicalHistory.conditions && patientMedicalHistory.conditions.length > 0 && (
                           <div>
                             <Label className="text-sm font-medium flex items-center">
                               <Heart className="h-4 w-4 mr-2" />
-                              Medical Conditions
+                              Medical Conditions ({patientMedicalHistory.conditions.length})
                             </Label>
-                            <div className="mt-2 space-y-2">
+                            <div className="mt-2 space-y-3">
                               {patientMedicalHistory.conditions.map((condition, index) => (
-                                <div key={index} className="p-3 bg-gray-50 rounded-lg">
-                                  <h5 className="font-medium">{condition.name}</h5>
-                                  <p className="text-sm text-gray-600">
-                                    Status: {condition.status} | Diagnosed: {formatDate(condition.diagnosisDate)}
-                                  </p>
-                                  {condition.notes && (
-                                    <p className="text-sm text-gray-500 mt-1">{condition.notes}</p>
-                                  )}
+                                <div key={index} className="p-4 bg-white border rounded-lg shadow-sm">
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-3 mb-2">
+                                        <h5 className="font-semibold text-lg">{condition.name}</h5>
+                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                          condition.status === 'active' ? 'bg-red-100 text-red-800' :
+                                          condition.status === 'resolved' ? 'bg-green-100 text-green-800' :
+                                          condition.status === 'chronic' ? 'bg-orange-100 text-orange-800' :
+                                          'bg-blue-100 text-blue-800'
+                                        }`}>
+                                          {condition.status}
+                                        </span>
+                                      </div>
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                                        <div>
+                                          <span className="font-medium text-gray-700">Diagnosed:</span>
+                                          <span className="ml-2 text-gray-600">{formatDate(condition.diagnosisDate)}</span>
+                                        </div>
+                                        <div>
+                                          <span className="font-medium text-gray-700">Duration:</span>
+                                          <span className="ml-2 text-gray-600">
+                                            {condition.diagnosisDate ? 
+                                              `${Math.floor((new Date() - new Date(condition.diagnosisDate)) / (1000 * 60 * 60 * 24 * 365.25))} years` : 
+                                              'Unknown'
+                                            }
+                                          </span>
+                                        </div>
+                                      </div>
+                                      {condition.notes && (
+                                        <div className="mt-2 p-2 bg-gray-50 rounded text-sm">
+                                          <span className="font-medium text-gray-700">Notes:</span>
+                                          <p className="text-gray-600 mt-1">{condition.notes}</p>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
                                 </div>
                               ))}
                             </div>
@@ -379,18 +442,56 @@ const PatientRecords = () => {
                           <div>
                             <Label className="text-sm font-medium flex items-center">
                               <Pill className="h-4 w-4 mr-2" />
-                              Current Medications
+                              Current Medications ({patientMedicalHistory.medications.length})
                             </Label>
-                            <div className="mt-2 space-y-2">
+                            <div className="mt-2 space-y-3">
                               {patientMedicalHistory.medications.map((medication, index) => (
-                                <div key={index} className="p-3 bg-gray-50 rounded-lg">
-                                  <h5 className="font-medium">{medication.name}</h5>
-                                  <p className="text-sm text-gray-600">
-                                    {medication.dosage} - {medication.frequency}
-                                  </p>
-                                  <p className="text-sm text-gray-500">
-                                    Prescribed by: {medication.prescribedBy}
-                                  </p>
+                                <div key={index} className="p-4 bg-white border rounded-lg shadow-sm">
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-3 mb-2">
+                                        <h5 className="font-semibold text-lg">{medication.name}</h5>
+                                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                          Current Medication
+                                        </span>
+                                      </div>
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm mb-2">
+                                        <div>
+                                          <span className="font-medium text-gray-700">Dosage:</span>
+                                          <span className="ml-2 text-gray-600">{medication.dosage}</span>
+                                        </div>
+                                        <div>
+                                          <span className="font-medium text-gray-700">Frequency:</span>
+                                          <span className="ml-2 text-gray-600">{medication.frequency}</span>
+                                        </div>
+                                        <div>
+                                          <span className="font-medium text-gray-700">Start Date:</span>
+                                          <span className="ml-2 text-gray-600">{formatDate(medication.startDate)}</span>
+                                        </div>
+                                        <div>
+                                          <span className="font-medium text-gray-700">Prescribed By:</span>
+                                          <span className="ml-2 text-gray-600">{medication.prescribedBy || 'Not specified'}</span>
+                                        </div>
+                                      </div>
+                                      {medication.endDate && (
+                                        <div className="text-sm">
+                                          <span className="font-medium text-gray-700">End Date:</span>
+                                          <span className="ml-2 text-gray-600">{formatDate(medication.endDate)}</span>
+                                        </div>
+                                      )}
+                                      {medication.startDate && (
+                                        <div className="mt-2 text-sm">
+                                          <span className="font-medium text-gray-700">Duration:</span>
+                                          <span className="ml-2 text-gray-600">
+                                            {medication.endDate ? 
+                                              `${Math.floor((new Date(medication.endDate) - new Date(medication.startDate)) / (1000 * 60 * 60 * 24))} days` :
+                                              `${Math.floor((new Date() - new Date(medication.startDate)) / (1000 * 60 * 60 * 24))} days (ongoing)`
+                                            }
+                                          </span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
                                 </div>
                               ))}
                             </div>

@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { getMedicalHistory, updateMedicalHistory } from '../../utils/database';
 
-const LifestylePlans = () => {
+const LifestylePlans = ({ onDataUpdate }) => {
   const { currentUser } = useAuth();
   const [lifestyleData, setLifestyleData] = useState({
     dietPlan: {
@@ -90,6 +90,11 @@ const LifestylePlans = () => {
       });
       setLifestyleData(updatedData);
       setSuccess('Lifestyle plan updated successfully!');
+      
+      // Notify parent component of data update
+      if (onDataUpdate) {
+        onDataUpdate();
+      }
     } catch (error) {
       console.error('Error updating lifestyle data:', error);
       setError('Failed to update lifestyle plan');
@@ -375,27 +380,27 @@ const LifestylePlans = () => {
 
               {/* Existing Meals */}
               <div className="space-y-2">
-                {lifestyleData.dietPlan.meals.map((meal) => (
-                  <div key={meal.id} className="flex items-center justify-between p-3 border rounded-lg">
+                {lifestyleData.dietPlan.meals?.map((meal) => (
+                  <div key={meal?.id} className="flex items-center justify-between p-3 border rounded-lg">
                     <div>
-                      <h4 className="font-medium">{meal.name}</h4>
+                      <h4 className="font-medium">{meal?.name}</h4>
                       <p className="text-sm text-gray-600">
-                        Time: {meal.time} | Calories: {meal.calories}
+                        Time: {meal?.time} | Calories: {meal?.calories}
                       </p>
-                      {meal.notes && (
-                        <p className="text-sm text-gray-500 mt-1">{meal.notes}</p>
+                      {meal?.notes && (
+                        <p className="text-sm text-gray-500 mt-1">{meal?.notes}</p>
                       )}
                     </div>
                     <Button
                       size="sm"
                       variant="destructive"
-                      onClick={() => removeItem('dietPlan', 'meals', meal.id)}
+                      onClick={() => removeItem('dietPlan', 'meals', meal?.id)}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 ))}
-                {lifestyleData.dietPlan.meals.length === 0 && (
+                {lifestyleData.dietPlan.meals?.length === 0 && (
                   <p className="text-center text-gray-500 py-4">No meals planned yet</p>
                 )}
               </div>
@@ -445,22 +450,22 @@ const LifestylePlans = () => {
 
               {/* Existing Restrictions */}
               <div className="space-y-2">
-                {lifestyleData.dietPlan.restrictions.map((restriction) => (
-                  <div key={restriction.id} className="flex items-center justify-between p-3 border rounded-lg">
+                {lifestyleData.dietPlan.restrictions?.map((restriction) => (
+                  <div key={restriction?.id} className="flex items-center justify-between p-3 border rounded-lg">
                     <div>
-                      <h4 className="font-medium">{restriction.type}</h4>
-                      <p className="text-sm text-gray-600">{restriction.description}</p>
+                      <h4 className="font-medium">{restriction?.type}</h4>
+                      <p className="text-sm text-gray-600">{restriction?.description}</p>
                     </div>
                     <Button
                       size="sm"
                       variant="destructive"
-                      onClick={() => removeItem('dietPlan', 'restrictions', restriction.id)}
+                      onClick={() => removeItem('dietPlan', 'restrictions', restriction?.id)}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 ))}
-                {lifestyleData.dietPlan.restrictions.length === 0 && (
+                {lifestyleData.dietPlan.restrictions?.length === 0 && (
                   <p className="text-center text-gray-500 py-4">No restrictions recorded</p>
                 )}
               </div>
@@ -513,24 +518,24 @@ const LifestylePlans = () => {
 
               {/* Existing Supplements */}
               <div className="space-y-2">
-                {lifestyleData.dietPlan.supplements.map((supplement) => (
-                  <div key={supplement.id} className="flex items-center justify-between p-3 border rounded-lg">
+                {lifestyleData.dietPlan.supplements?.map((supplement) => (
+                  <div key={supplement?.id} className="flex items-center justify-between p-3 border rounded-lg">
                     <div>
-                      <h4 className="font-medium">{supplement.name}</h4>
+                      <h4 className="font-medium">{supplement?.name}</h4>
                       <p className="text-sm text-gray-600">
-                        {supplement.dosage} - {supplement.frequency}
+                        {supplement?.dosage} - {supplement?.frequency}
                       </p>
                     </div>
                     <Button
                       size="sm"
                       variant="destructive"
-                      onClick={() => removeItem('dietPlan', 'supplements', supplement.id)}
+                      onClick={() => removeItem('dietPlan', 'supplements', supplement?.id)}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 ))}
-                {lifestyleData.dietPlan.supplements.length === 0 && (
+                {lifestyleData.dietPlan.supplements?.length === 0 && (
                   <p className="text-center text-gray-500 py-4">No supplements recorded</p>
                 )}
               </div>
@@ -642,24 +647,24 @@ const LifestylePlans = () => {
 
               {/* Existing Activities */}
               <div className="space-y-2">
-                {lifestyleData.exercisePlan.activities.map((activity) => (
-                  <div key={activity.id} className="flex items-center justify-between p-3 border rounded-lg">
+                {lifestyleData.exercisePlan.activities?.map((activity) => (
+                  <div key={activity?.id} className="flex items-center justify-between p-3 border rounded-lg">
                     <div>
-                      <h4 className="font-medium">{activity.name}</h4>
+                      <h4 className="font-medium">{activity?.name}</h4>
                       <p className="text-sm text-gray-600">
-                        Duration: {activity.duration} min | Intensity: {activity.intensity} | Calories: {activity.calories}
+                        Duration: {activity?.duration} min | Intensity: {activity?.intensity} | Calories: {activity?.calories}
                       </p>
                     </div>
                     <Button
                       size="sm"
                       variant="destructive"
-                      onClick={() => removeItem('exercisePlan', 'activities', activity.id)}
+                      onClick={() => removeItem('exercisePlan', 'activities', activity?.id)}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 ))}
-                {lifestyleData.exercisePlan.activities.length === 0 && (
+                {lifestyleData.exercisePlan.activities?.length === 0 && (
                   <p className="text-center text-gray-500 py-4">No activities planned yet</p>
                 )}
               </div>
@@ -730,31 +735,31 @@ const LifestylePlans = () => {
               </div>
 
               {/* Display metrics by type */}
-              {['weight', 'bloodPressure', 'heartRate', 'sleepHours'].map((metricType) => (
+              {['weight', 'bloodPressure', 'heartRate', 'sleepHours']?.map((metricType) => (
                 <div key={metricType} className="space-y-2">
                   <h4 className="font-medium capitalize">{metricType.replace(/([A-Z])/g, ' $1')}</h4>
                   <div className="space-y-1">
-                    {lifestyleData.healthMetrics[metricType]?.map((metric) => (
-                      <div key={metric.id} className="flex items-center justify-between p-2 border rounded">
+                    {lifestyleData.healthMetrics?.[metricType]?.map((metric) => (
+                      <div key={metric?.id} className="flex items-center justify-between p-2 border rounded">
                         <div>
-                          <span className="font-medium">{metric.value}</span>
+                          <span className="font-medium">{metric?.value}</span>
                           <span className="text-sm text-gray-500 ml-2">
-                            {new Date(metric.date).toLocaleDateString()}
+                            {new Date(metric?.date).toLocaleDateString()}
                           </span>
-                          {metric.notes && (
-                            <span className="text-sm text-gray-500 ml-2">- {metric.notes}</span>
+                          {metric?.notes && (
+                            <span className="text-sm text-gray-500 ml-2">- {metric?.notes}</span>
                           )}
                         </div>
                         <Button
                           size="sm"
                           variant="destructive"
-                          onClick={() => removeItem('healthMetrics', metricType, metric.id)}
+                          onClick={() => removeItem('healthMetrics', metricType, metric?.id)}
                         >
                           <Trash2 className="h-3 w-3" />
                         </Button>
                       </div>
                     ))}
-                    {(!lifestyleData.healthMetrics[metricType] || lifestyleData.healthMetrics[metricType].length === 0) && (
+                    {(!lifestyleData.healthMetrics?.[metricType] || lifestyleData.healthMetrics?.[metricType]?.length === 0) && (
                       <p className="text-sm text-gray-500 py-2">No {metricType} records yet</p>
                     )}
                   </div>

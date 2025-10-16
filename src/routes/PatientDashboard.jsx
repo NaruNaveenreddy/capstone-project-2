@@ -19,32 +19,46 @@ import AppointmentBooking from '../components/patient/AppointmentBooking';
 import MedicalHistory from '../components/patient/MedicalHistory';
 import LifestylePlans from '../components/patient/LifestylePlans';
 import AIAssistant from '../components/patient/AIAssistant';
-import { getAppointments } from '../utils/database';
+import { getAppointments, getPatientMedicalHistory } from '../utils/database';
 
 const PatientDashboard = () => {
   const { currentUser, userRole, logout } = useAuth();
   const [upcomingAppointments, setUpcomingAppointments] = useState([]);
+  const [medicalHistory, setMedicalHistory] = useState(null);
+  const [lifestylePlans, setLifestylePlans] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchAppointments = async () => {
+    const fetchDashboardData = async () => {
       if (currentUser) {
         try {
+          // Fetch appointments
           const appointments = await getAppointments(currentUser.uid, 'patient');
           const upcoming = appointments
             .filter(apt => apt.status === 'scheduled' && new Date(apt.date) >= new Date())
             .sort((a, b) => new Date(a.date) - new Date(b.date))
             .slice(0, 3);
           setUpcomingAppointments(upcoming);
+
+          // Fetch medical history
+          const medicalData = await getPatientMedicalHistory(currentUser.uid);
+          setMedicalHistory(medicalData);
+
+          // Fetch lifestyle plans (from localStorage or database)
+          const storedPlans = localStorage.getItem(`lifestylePlans_${currentUser.uid}`);
+          if (storedPlans) {
+            setLifestylePlans(JSON.parse(storedPlans));
+          }
+
         } catch (error) {
-          console.error('Error fetching appointments:', error);
+          console.error('Error fetching dashboard data:', error);
         } finally {
           setLoading(false);
         }
       }
     };
 
-    fetchAppointments();
+    fetchDashboardData();
   }, [currentUser]);
 
   const handleLogout = async () => {
@@ -70,6 +84,26 @@ const PatientDashboard = () => {
       minute: '2-digit',
       hour12: true
     });
+  };
+
+  // Calculate medical records stats
+  const getMedicalRecordsCount = () => {
+    if (!medicalHistory) return 0;
+    const conditions = medicalHistory.conditions?.length || 0;
+    const medications = medicalHistory.medications?.length || 0;
+    const allergies = medicalHistory.allergies?.length || 0;
+    return conditions + medications + allergies;
+  };
+
+  // Calculate health plans stats
+  const getHealthPlansCount = () => {
+    if (!lifestylePlans) return 0;
+    let count = 0;
+    if (lifestylePlans.dietPlan) count++;
+    if (lifestylePlans.exercisePlan) count++;
+    if (lifestylePlans.sleepPlan) count++;
+    if (lifestylePlans.stressPlan) count++;
+    return count;
   };
 
   return (
@@ -133,9 +167,11 @@ const PatientDashboard = () => {
                 <FileText className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">-</div>
+                <div className="text-2xl font-bold">{getMedicalRecordsCount()}</div>
                 <p className="text-xs text-muted-foreground">
-                  View your medical history
+                  {getMedicalRecordsCount() === 0 ? 'No records yet' : 
+                   getMedicalRecordsCount() === 1 ? '1 record' : 
+                   `${getMedicalRecordsCount()} records`}
                 </p>
               </CardContent>
             </Card>
@@ -146,9 +182,11 @@ const PatientDashboard = () => {
                 <Activity className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">-</div>
+                <div className="text-2xl font-bold">{getHealthPlansCount()}</div>
                 <p className="text-xs text-muted-foreground">
-                  Diet & exercise plans
+                  {getHealthPlansCount() === 0 ? 'No plans created' : 
+                   getHealthPlansCount() === 1 ? '1 active plan' : 
+                   `${getHealthPlansCount()} active plans`}
                 </p>
               </CardContent>
             </Card>
@@ -231,11 +269,28 @@ const PatientDashboard = () => {
                 </TabsContent>
 
                 <TabsContent value="medical" className="mt-6">
-                  <MedicalHistory />
+                  <MedicalHistory onDataUpdate={() => {
+                    // Refresh medical history data when updated
+                    const refreshData = async () => {
+                      if (currentUser) {
+                        const medicalData = await getPatientMedicalHistory(currentUser.uid);
+                        setMedicalHistory(medicalData);
+                      }
+                    };
+                    refreshData();
+                  }} />
                 </TabsContent>
 
                 <TabsContent value="lifestyle" className="mt-6">
-                  <LifestylePlans />
+                  <LifestylePlans onDataUpdate={() => {
+                    // Refresh lifestyle plans data when updated
+                    if (currentUser) {
+                      const storedPlans = localStorage.getItem(`lifestylePlans_${currentUser.uid}`);
+                      if (storedPlans) {
+                        setLifestylePlans(JSON.parse(storedPlans));
+                      }
+                    }
+                  }} />
                 </TabsContent>
 
                 <TabsContent value="ai" className="mt-6">

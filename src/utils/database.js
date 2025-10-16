@@ -328,3 +328,122 @@ export const deletePrescription = async (prescriptionId) => {
   }
 };
 
+// Patient Medical History Functions for Doctor Access
+// patientMedicalHistory/
+//   {patientId}/
+//     conditions: array
+//     medications: array
+//     allergies: array
+//     surgeries: array
+//     immunizations: array
+//     labResults: array
+//     lastUpdated: ISO string
+
+export const savePatientMedicalHistory = async (patientId, medicalData) => {
+  try {
+    const medicalRef = ref(database, `patientMedicalHistory/${patientId}`);
+    await set(medicalRef, {
+      ...medicalData,
+      lastUpdated: new Date().toISOString()
+    });
+    return true;
+  } catch (error) {
+    console.error('Error saving patient medical history:', error);
+    throw error;
+  }
+};
+
+export const getPatientMedicalHistory = async (patientId) => {
+  try {
+    const medicalRef = ref(database, `patientMedicalHistory/${patientId}`);
+    const snapshot = await get(medicalRef);
+    if (snapshot.exists()) {
+      return snapshot.val();
+    }
+    return null;
+  } catch (error) {
+    console.error('Error getting patient medical history:', error);
+    throw error;
+  }
+};
+
+export const getAllPatientsMedicalHistory = async () => {
+  try {
+    const medicalRef = ref(database, 'patientMedicalHistory');
+    const snapshot = await get(medicalRef);
+    if (snapshot.exists()) {
+      const medicalHistories = snapshot.val();
+      return Object.entries(medicalHistories).map(([patientId, data]) => ({
+        patientId,
+        ...data
+      }));
+    }
+    return [];
+  } catch (error) {
+    console.error('Error getting all patients medical history:', error);
+    throw error;
+  }
+};
+
+export const getPatientsByCondition = async (conditionName) => {
+  try {
+    const medicalRef = ref(database, 'patientMedicalHistory');
+    const snapshot = await get(medicalRef);
+    if (snapshot.exists()) {
+      const medicalHistories = snapshot.val();
+      const patientsWithCondition = [];
+      
+      Object.entries(medicalHistories).forEach(([patientId, data]) => {
+        if (data.conditions && Array.isArray(data.conditions)) {
+          const hasCondition = data.conditions.some(condition => 
+            condition.name && condition.name.toLowerCase().includes(conditionName.toLowerCase())
+          );
+          if (hasCondition) {
+            patientsWithCondition.push({
+              patientId,
+              ...data
+            });
+          }
+        }
+      });
+      
+      return patientsWithCondition;
+    }
+    return [];
+  } catch (error) {
+    console.error('Error getting patients by condition:', error);
+    throw error;
+  }
+};
+
+export const getPatientsByMedication = async (medicationName) => {
+  try {
+    const medicalRef = ref(database, 'patientMedicalHistory');
+    const snapshot = await get(medicalRef);
+    if (snapshot.exists()) {
+      const medicalHistories = snapshot.val();
+      const patientsWithMedication = [];
+      
+      Object.entries(medicalHistories).forEach(([patientId, data]) => {
+        if (data.medications && Array.isArray(data.medications)) {
+          const hasMedication = data.medications.some(medication => 
+            medication.name && medication.name.toLowerCase().includes(medicationName.toLowerCase())
+          );
+          if (hasMedication) {
+            patientsWithMedication.push({
+              patientId,
+              ...data
+            });
+          }
+        }
+      });
+      
+      return patientsWithMedication;
+    }
+    return [];
+  } catch (error) {
+    console.error('Error getting patients by medication:', error);
+    throw error;
+  }
+};
+
