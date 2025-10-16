@@ -74,8 +74,8 @@ const AIAssistant = () => {
     setError('');
 
     try {
-      // Simulate AI response (replace with actual Gemini API call later)
-      const aiResponse = await simulateAIResponse(message);
+      // Call Gemini API
+      const aiResponse = await callGeminiAPI(message);
       
       const aiMessage = {
         id: Date.now() + 1,
@@ -84,41 +84,96 @@ const AIAssistant = () => {
         timestamp: new Date().toISOString()
       };
 
-      setTimeout(() => {
-        setMessages(prev => [...prev, aiMessage]);
-        setIsTyping(false);
-        setLoading(false);
-      }, 1500);
+      setMessages(prev => [...prev, aiMessage]);
+      setIsTyping(false);
+      setLoading(false);
 
     } catch (error) {
       console.error('Error sending message:', error);
-      setError('Failed to get AI response. Please try again.');
+      
+      // Add error message to chat
+      const errorMessage = {
+        id: Date.now() + 1,
+        type: 'ai',
+        content: 'I apologize, but I encountered an error while processing your request. Please try again or contact support if the issue persists.',
+        timestamp: new Date().toISOString(),
+        isError: true
+      };
+      
+      setMessages(prev => [...prev, errorMessage]);
+      setError(error.message || 'Failed to get AI response. Please try again.');
       setIsTyping(false);
       setLoading(false);
     }
   };
 
-  const simulateAIResponse = async (message) => {
-    // This is a placeholder - replace with actual Gemini API integration
-    const responses = {
-      'symptoms': 'I understand you\'re experiencing symptoms. While I can provide general information, it\'s important to consult with a healthcare professional for proper diagnosis. Can you describe your symptoms in more detail?',
-      'diet': 'I\'d be happy to help with dietary advice! A balanced diet typically includes fruits, vegetables, lean proteins, whole grains, and healthy fats. What specific dietary goals or concerns do you have?',
-      'exercise': 'Great that you want to start exercising! I recommend starting with 150 minutes of moderate-intensity exercise per week. What\'s your current fitness level and what activities interest you?',
-      'medication': 'I can provide general information about medications, but always consult your doctor or pharmacist for specific medical advice. What medication questions do you have?'
-    };
-
-    const lowerMessage = message.toLowerCase();
+  const callGeminiAPI = async (message) => {
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
     
-    if (lowerMessage.includes('symptom')) {
-      return responses.symptoms;
-    } else if (lowerMessage.includes('diet') || lowerMessage.includes('nutrition')) {
-      return responses.diet;
-    } else if (lowerMessage.includes('exercise') || lowerMessage.includes('workout')) {
-      return responses.exercise;
-    } else if (lowerMessage.includes('medication') || lowerMessage.includes('medicine')) {
-      return responses.medication;
-    } else {
-      return 'Thank you for your question. I\'m here to help with general health guidance. For specific medical concerns, please consult with your healthcare provider. How else can I assist you?';
+    if (!apiKey) {
+      throw new Error('Gemini API key not found. Please check your environment configuration.');
+    }
+
+    const prompt = `You are a helpful AI health assistant. Provide preliminary health guidance and information. Always remind users to consult healthcare professionals for medical decisions. Be empathetic, informative, and safety-conscious. 
+
+User message: ${message}
+
+Please respond with helpful, accurate health information while emphasizing the importance of professional medical consultation for serious concerns.`;
+
+    try {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{
+              text: prompt
+            }]
+          }],
+          generationConfig: {
+            temperature: 0.7,
+            topK: 40,
+            topP: 0.95,
+            maxOutputTokens: 1024,
+          },
+          safetySettings: [
+            {
+              category: "HARM_CATEGORY_HARASSMENT",
+              threshold: "BLOCK_MEDIUM_AND_ABOVE"
+            },
+            {
+              category: "HARM_CATEGORY_HATE_SPEECH",
+              threshold: "BLOCK_MEDIUM_AND_ABOVE"
+            },
+            {
+              category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+              threshold: "BLOCK_MEDIUM_AND_ABOVE"
+            },
+            {
+              category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+              threshold: "BLOCK_MEDIUM_AND_ABOVE"
+            }
+          ]
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`API Error: ${errorData.error?.message || 'Failed to get response from Gemini API'}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.candidates && data.candidates[0] && data.candidates[0].content) {
+        return data.candidates[0].content.parts[0].text;
+      } else {
+        throw new Error('Invalid response format from Gemini API');
+      }
+    } catch (error) {
+      console.error('Gemini API Error:', error);
+      throw error;
     }
   };
 
@@ -180,15 +235,15 @@ const AIAssistant = () => {
 
       {/* Chat Interface */}
       <Card className="h-96 flex flex-col">
-        <CardHeader className="pb-3">
+        <CardHeader className="pb-3 flex-shrink-0">
           <CardTitle className="flex items-center text-sm">
             <MessageCircle className="h-4 w-4 mr-2" />
             Health Chat
           </CardTitle>
         </CardHeader>
-        <CardContent className="flex-1 flex flex-col p-0">
+        <CardContent className="flex-1 flex flex-col p-0 min-h-0">
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
             {messages.map((message) => (
               <div
                 key={message.id}
@@ -198,6 +253,8 @@ const AIAssistant = () => {
                   className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
                     message.type === 'user'
                       ? 'bg-blue-600 text-white'
+                      : message.isError
+                      ? 'bg-red-100 text-red-900 border border-red-200'
                       : 'bg-gray-100 text-gray-900'
                   }`}
                 >
@@ -210,11 +267,28 @@ const AIAssistant = () => {
                     )}
                     <div className="flex-1">
                       <p className="text-sm">{message.content}</p>
-                      <p className={`text-xs mt-1 ${
-                        message.type === 'user' ? 'text-blue-100' : 'text-gray-500'
-                      }`}>
-                        {formatTime(message.timestamp)}
-                      </p>
+                      <div className="flex items-center justify-between mt-1">
+                        <p className={`text-xs ${
+                          message.type === 'user' ? 'text-blue-100' : 'text-gray-500'
+                        }`}>
+                          {formatTime(message.timestamp)}
+                        </p>
+                        {message.isError && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-6 px-2 text-xs"
+                            onClick={() => {
+                              const lastUserMessage = messages[messages.indexOf(message) - 1];
+                              if (lastUserMessage && lastUserMessage.type === 'user') {
+                                sendMessage(lastUserMessage.content);
+                              }
+                            }}
+                          >
+                            Retry
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -251,7 +325,7 @@ const AIAssistant = () => {
           )}
 
           {/* Input Area */}
-          <div className="border-t p-4">
+          <div className="border-t p-4 flex-shrink-0">
             <div className="flex space-x-2">
               <Textarea
                 value={inputMessage}
