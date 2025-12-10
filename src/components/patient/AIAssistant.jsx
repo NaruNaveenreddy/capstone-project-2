@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { GoogleGenAI } from '@google/genai';
 import { useAuth } from '../../context/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -103,64 +104,58 @@ const AIAssistant = () => {
   };
 
   const callGeminiAPI = async (message) => {
-    // Using hardcoded API key for immediate functionality
-    const apiKey = 'AIzaSyANNSwPDEXVxDggnZUtKOc9SeGBM4CLpz0';
-    
-    console.log('Using hardcoded Gemini API key');
+    let apiKey = import.meta.env.VITE_GEMINI_API_KEY || "AIzaSyAB1UGstHRG27d_3ye0AOXMZr3JvpqNly8";
+    if (!apiKey) {
+      throw new Error('API key missing: set VITE_GEMINI_API_KEY in your environment.');
+    }
 
     const systemPrompt = `You are a helpful AI health assistant. You can provide general health information, symptom guidance, and wellness advice. However, you must always remind users that you are not a substitute for professional medical advice and they should consult healthcare professionals for medical decisions. Keep responses concise, helpful, and medically responsible.`;
 
     try {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      const ai = new GoogleGenAI({ apiKey });
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              {
+                text: `${systemPrompt}\n\nUser: ${message}`
+              }
+            ]
+          }
+        ],
+        generationConfig: {
+          temperature: 0.7,
+          topK: 40,
+          topP: 0.95,
+          maxOutputTokens: 1024
         },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{
-              text: `${systemPrompt}\n\nUser: ${message}`
-            }]
-          }],
-          generationConfig: {
-            temperature: 0.7,
-            topK: 40,
-            topP: 0.95,
-            maxOutputTokens: 1024,
+        safetySettings: [
+          {
+            category: "HARM_CATEGORY_HARASSMENT",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE"
           },
-          safetySettings: [
-            {
-              category: "HARM_CATEGORY_HARASSMENT",
-              threshold: "BLOCK_MEDIUM_AND_ABOVE"
-            },
-            {
-              category: "HARM_CATEGORY_HATE_SPEECH",
-              threshold: "BLOCK_MEDIUM_AND_ABOVE"
-            },
-            {
-              category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-              threshold: "BLOCK_MEDIUM_AND_ABOVE"
-            },
-            {
-              category: "HARM_CATEGORY_DANGEROUS_CONTENT",
-              threshold: "BLOCK_MEDIUM_AND_ABOVE"
-            }
-          ]
-        })
+          {
+            category: "HARM_CATEGORY_HATE_SPEECH",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE"
+          },
+          {
+            category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE"
+          },
+          {
+            category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE"
+          }
+        ]
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`API Error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
-      }
-
-      const data = await response.json();
-      
-      if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
+      if (!response?.text) {
         throw new Error('Invalid response format from Gemini API');
       }
 
-      return data.candidates[0].content.parts[0].text;
+      return response.text;
     } catch (error) {
       console.error('Gemini API Error:', error);
       throw error;
